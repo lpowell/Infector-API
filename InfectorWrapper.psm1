@@ -31,7 +31,7 @@ function Invoke-InfectorLogon {
         "password"=$(ConvertFrom-SecureString -AsPlainText $Password)
     }
 
-    $response = Invoke-RestMethod -Uri "http://infector.sh/auth/login" -Body ($body | ConvertTo-Json) -ContentType "application/json" -Method POST
+    $response = Invoke-RestMethod -Uri "http://<server>/auth/login" -Body ($body | ConvertTo-Json) -ContentType "application/json" -Method POST
 
     Write-Host "Using API Key $($response.api_key)"
 
@@ -89,7 +89,7 @@ function Invoke-InfectorScanner {
     } | ConvertTo-Json
 
     try{
-        $response = Invoke-RestMethod "http://infector.sh/scanner/$resource" -body $body -ContentType "application/json" | Select-Object -ExpandProperty response 
+        $response = Invoke-RestMethod "http://<server>/scanner/$resource" -body $body -ContentType "application/json" | Select-Object -ExpandProperty response 
     }catch {
         if($_.Exception.Response.StatusCode.value__  -eq 401){
             Write-Host "You need to refresh your API key. Please use Invoke-InfectorLogon."
@@ -128,7 +128,7 @@ function Invoke-InfectorConvert {
     } | ConvertTo-Json
 
     try{
-        $response = Invoke-RestMethod "http://infector.sh/convert/$resource" -body $body -ContentType "application/json" | Select-Object -ExpandProperty response 
+        $response = Invoke-RestMethod "http://<server>/convert/$resource" -body $body -ContentType "application/json" | Select-Object -ExpandProperty response 
     }catch {
         if($_.Exception.Response.StatusCode.value__  -eq 401){
             Write-Host "You need to refresh your API key. Please use Invoke-InfectorLogon."
@@ -157,7 +157,7 @@ function Invoke-InfectorOperational {
     } | ConvertTo-Json
 
     try{
-        $response = Invoke-RestMethod "http://infector.sh/operational/$resource" -body $body -ContentType "application/json" | Select-Object -ExpandProperty response 
+        $response = Invoke-RestMethod "http://<server>/operational/$resource" -body $body -ContentType "application/json" | Select-Object -ExpandProperty response 
     }catch {
         if($_.Exception.Response.StatusCode.value__  -eq 401){
             Write-Host "You need to refresh your API key. Please use Invoke-InfectorLogon."
@@ -185,7 +185,7 @@ function Invoke-InfectorTesting {
     } | ConvertTo-Json
 
     try{
-        $response = Invoke-RestMethod "http://infector.sh/testing/$resource" -body $body -ContentType "application/json" | Select-Object -ExpandProperty response 
+        $response = Invoke-RestMethod "http://<server>/testing/$resource" -body $body -ContentType "application/json" | Select-Object -ExpandProperty response 
     }catch {
         if($_.Exception.Response.StatusCode.value__  -eq 401){
             Write-Host "You need to refresh your API key. Please use Invoke-InfectorLogon."

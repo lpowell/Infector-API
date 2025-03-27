@@ -60,6 +60,11 @@ pub async fn auth_login(
         return Err(StatusCode::UNAUTHORIZED);
     };
 
+    // Validate user credentials
+    // if payload.username != valid_user || payload.password != valid_pass {
+    //     return Err(StatusCode::UNAUTHORIZED);
+    // }
+
     // Generate random API key
     let api_key: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)

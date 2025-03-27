@@ -13,6 +13,7 @@ INFECTOR API
 
 ## Table of Contents
 
+- [To-Do](#to-do)
 - [Description](#description)
 - [Layout](#layout)
     - [Modules](#modules)
@@ -29,6 +30,40 @@ INFECTOR API
         - [Editing existing modules](#to-intgrate-a-new-resource-in-an-existing-endpoint)
 - [Logging](#description)
 
+## To-Do
+
+### Upcoming
+
+- Further decryption schemes
+    - AES-CBC
+    - RSA
+    - ChaCha20
+- Endpoint API
+    - Install or execute remote scripts from github or other specified sources
+    - String analysis for submitted files
+- Additional scanners
+    - Censys
+    - Sandbox services
+    - DNS records 
+- Further conversion schemes
+    - Bxor/Bit flipping
+- Swagger page 
+- Database diagrams
+- Better documentation
+- PowerShell API module improvements
+- Improvements to error handling and reporting
+    - API should return functional/usable errors
+    - StatusCode adjustments  
+- [Logging improvements](#logging)
+    - Access Log
+    - Resource Log
+    - Transaction Log
+
+### Recent Additions
+
+- Added a resource for [pulling session key expire time](#operational) at `<server>/operational/expire-time`
+- Added [AES-GCM decryptor](#convert) to convert endpoint at `<server>/convert/encryption/aesgcm`
+- Updated PowerShell API module
 
 ## Description
 
@@ -77,7 +112,7 @@ WIP
 
 ### Modules
 
-WIP
+The Infector API uses modules to add features to the webserver. Each endpoint is represented by a routing function in main.rs, which directs the Axum server to a specified module containing the endpoint resources and code. This modular approach makes integrating new endpoints and resources simpler. 
 
 #### Auth
 
@@ -118,7 +153,7 @@ Successful return indicates that the server is functional and their are no issue
 
 #### Convert
 
-This endpoint is used for conversions. Strictly decoding at the moment. Encoded content should be sent via a content field in the JSON body. An example request may look like:
+This endpoint is used for conversions. Encoded content should be sent via a content field in the JSON body. An example request may look like:
 
 ```JSON
 # to <server>/convert/base64
@@ -127,25 +162,26 @@ This endpoint is used for conversions. Strictly decoding at the moment. Encoded 
     "content": "base64 encoded string"
 }
 ```
-
 This will return the decoded content.  
 
-Future inclusions may allow for encrypted content as well. Usage might look like this:
+The convert endpoint also supports AES-GCM decryption. This and other resources can be reached with /convert/encryption/.
+For example:
 ```JSON
-# to <server>/convert/aes
+# to <server>/convert/encryption/aesgcm
 {
     "api_key": "key",
-    "content": "AES content",
-    "aes_key": "AES key",
-    "aes_iv": "AES Initialization Vector"
+    "content": "hex string of encoded content",
+    "key": "encryption key",
+    "nonce": "12 byte nonce"
 }
 ```
+A successful decryption will return the decrypted string. Otherwise, an error will be returned.
 
-Decryption services may also be ported to their own endpoint.
 
 #### Scanner
 
-This endpoint is used for interfacing with both local scanners like nmap, as well as remote tools like Censys or Shodan lookups. Currently, the scanner endpoint only supports the nmap resource. 
+This endpoint is used for interfacing with both local scanners like nmap, as well as remote tools like Censys or Shodan lookups.
+This endpoint supports /shodan, /nmap, and /virustotal. 
 
 ```JSON
 # to <server>/scanner/nmap
@@ -168,17 +204,28 @@ This endpoint is used for operational requests, such as listing available endpoi
 }
 ```
 
+This will return the time (in epoch) that the current key expires. 
+
+```JSON
+# to <server>/operational/expire-time
+{
+    "api_key": "key"
+}
+```
+
 ### Structs
+
+Public structs are defined in api_structs.rs. 
 
 WIP
 
 ### Database
 
-WIP
+The current database is a SQLite DB operating two tables. A user table for authenticating users and an authentication table that handles generate keys. Key generation is not currently tied to users, but a future update will include a user id for all generated keys, enhancing logging functions. 
 
 ## Editing
 
-WIP
+Editing the API is a simple process. There are minimal steps to adding new endpoints and resources, and templates exist to help speed up development. Modifying the PowerShell API module to include the API modifications should be a straightforward process as well. 
 
 ### New Endpoints/Resources
 
@@ -215,4 +262,6 @@ In the existing endpoint module
 
 ## Logging
 
-WIP
+Logging is currently performed with tracing::info!. This records certain database information and transactions. Server logging is done through the console with enhanced logging planned at a later point in development.
+
+Ideally, an access log, resource log, and database log will be utilized. The access log will record web server connections, the resource log will record endpoint operations, and the database log will record transactions.

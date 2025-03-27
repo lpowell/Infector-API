@@ -10,7 +10,11 @@ pub struct APIRequest {
 #[derive(Deserialize)]
 pub struct APIContentRequest {
     pub api_key: String,
-    pub content: String
+    pub content: String,
+
+    #[serde(default)]
+    pub key: Option<String>,
+    pub nonce: Option<String>,
 }
 
 // Define a text (String) response

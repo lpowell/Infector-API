@@ -40,7 +40,7 @@ async fn main() {
         .init();
 
     // Load database URL
-    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "<dbstring>".to_string());
 
     // Set up connection pool
     let pool = SqlitePool::connect(&db_url)
@@ -55,12 +55,17 @@ async fn main() {
         .route("/auth/{path}", post(auth))
         .route("/testing/{path}", get(testing))
         .route("/scanner/{path}", get(scanner))
+        .route("/convert/encryption/{path}", get(convert))
         .route("/convert/{path}", get(convert))
         .route("/operational/{path}", get(operational))
-        .route("/", get(|| async { Redirect::permanent("")}))
+        .route("/", get(|| async { Redirect::permanent("<your site here!>")}))
         .with_state(shared_state);
     // Default route should redirect to 
 
+    // set ctrl+c behavior
+    // ctrlc::set_handler(move || {
+    //     pool.close();
+    // }).expect("Could not set up handler");
 
     // Start the server
     let listener = TcpListener::bind("0.0.0.0:80").await.unwrap();

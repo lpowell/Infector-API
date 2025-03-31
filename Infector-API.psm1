@@ -205,7 +205,7 @@ function Convert-InfectorAPI {
         $content
     )
     if(!$resource){
-        return "$(Get-Help Convert-InfectorAuth)"
+        return "$(Get-Help Convert-InfectorAPI)"
     }
     # Get API key
     $key = Read-InfectorKey
@@ -334,4 +334,55 @@ function Test-InfectorAPI {
     $response
 }
 
-Export-ModuleMember -function Connect-InfectorAPI, Send-InfectorAPI, Convert-InfectorAPI, Get-InfectorAPI, Test-InfectorAPI
+function Invoke-InfectorAPI {
+<#
+    .SYNOPSIS
+    Infector API testing functions
+
+    .DESCRIPTION
+    This module is used to test the API connection. See the InfectorAPI documentation for more information.  
+
+    .PARAMETER resource
+    The resource to scan. 
+    Currently:
+        - hello_world
+
+    .EXAMPLE
+    Test-InfectorAPI -resource hello_world
+
+    .EXAMPLE
+    Test-InfectorAPI hello_world
+
+#>
+    [CmdletBinding()]
+    param (
+        [Parameter(ValueFromPipeline=$true)]
+        [String]
+        $resource,
+        [Parameter(ValueFromPipeline=$true)]
+        [String]
+        $content
+    )
+    if(!$resource){
+        return (Get-Help Invoke-InfectorAPI)
+    }
+
+    # Get API key
+    $key = Read-InfectorKey
+
+    $body = @{
+        "api_key"=$key;
+        "content"=$content
+    } | ConvertTo-Json
+
+    try{
+        $response = Invoke-RestMethod "http://<server>/endpoint/$resource" -body $body -ContentType "application/json" | Select-Object -ExpandProperty response 
+    }catch {
+        if($_.Exception.Response.StatusCode.value__  -eq 401){
+            return "You need to refresh your API key. Please use Connect-InfectorAPI."
+        }
+    }
+    $response
+
+}
+Export-ModuleMember -function Connect-InfectorAPI, Send-InfectorAPI, Convert-InfectorAPI, Get-InfectorAPI, Test-InfectorAPI, Invoke-InfectorAPI

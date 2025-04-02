@@ -13,6 +13,9 @@ use addr::parse_domain_name;
 // Must import api_structs 
 use crate::api_structs;
 
+// logging import
+use crate::logger;
+
 // Routing function
 // this function matches a valid path to a resource
 // all paths should be in the form of <url>/<endpoint>/<resource>
@@ -70,19 +73,28 @@ pub async fn nmap(
             
             // Test if the expire time is valid 
             if  current_time >= cmp_time {
+                let warning = format!("[INFO] API Key expired! [key] {}", api_key);
+                logger::writelog("access", warning);
                 return Err(StatusCode::UNAUTHORIZED);
             }
+            let info = format!("[INFO] API Key validated [key] {}", api_key);
+            logger::writelog("access", info);
+
         }
         Ok(None) => {
             tracing::warn!("API key not found: {}", api_key);
+            // Issue a warning if the key is not in the database
+            let warning = format!("[WARNING] API Key not found! [key] {}", api_key);
+            logger::writelog("access", warning);
             return Err(StatusCode::UNAUTHORIZED);
         }
         Err(e) => {
             tracing::error!("Database select failed: {}", e);
+            let error = format!("[ERROR] Database select failed!");
+            logger::writelog("transaction", error);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
-
     // This is where the API resource code goes
 
     // write something to parse out command line options and add them as args
@@ -119,8 +131,8 @@ pub async fn shodan(
     .fetch_optional(& *pool)
     .await;
 
-    // Match for DB result
-    match expired {
+   // Match for DB result
+   match expired {
         Ok(Some(row)) => {
             
             // Get the api key expire time and convert to an u64 
@@ -141,19 +153,28 @@ pub async fn shodan(
             
             // Test if the expire time is valid 
             if  current_time >= cmp_time {
+                let warning = format!("[INFO] API Key expired! [key] {}", api_key);
+                logger::writelog("access", warning);
                 return Err(StatusCode::UNAUTHORIZED);
             }
+            let info = format!("[INFO] API Key validated [key] {}", api_key);
+            logger::writelog("access", info);
+
         }
         Ok(None) => {
             tracing::warn!("API key not found: {}", api_key);
+            // Issue a warning if the key is not in the database
+            let warning = format!("[WARNING] API Key not found! [key] {}", api_key);
+            logger::writelog("access", warning);
             return Err(StatusCode::UNAUTHORIZED);
         }
         Err(e) => {
             tracing::error!("Database select failed: {}", e);
+            let error = format!("[ERROR] Database select failed!");
+            logger::writelog("transaction", error);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
-
     // This is where the API resource code goes
 
     let shodan_key = "";
@@ -223,15 +244,25 @@ pub async fn virustotal(
             
             // Test if the expire time is valid 
             if  current_time >= cmp_time {
+                let warning = format!("[INFO] API Key expired! [key] {}", api_key);
+                logger::writelog("access", warning);
                 return Err(StatusCode::UNAUTHORIZED);
             }
+            let info = format!("[INFO] API Key validated [key] {}", api_key);
+            logger::writelog("access", info);
+
         }
         Ok(None) => {
             tracing::warn!("API key not found: {}", api_key);
+            // Issue a warning if the key is not in the database
+            let warning = format!("[WARNING] API Key not found! [key] {}", api_key);
+            logger::writelog("access", warning);
             return Err(StatusCode::UNAUTHORIZED);
         }
         Err(e) => {
             tracing::error!("Database select failed: {}", e);
+            let error = format!("[ERROR] Database select failed!");
+            logger::writelog("transaction", error);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
@@ -248,15 +279,15 @@ pub async fn virustotal(
 
     if is_ip(content.as_str()) {
         // content is ip
-        println!("found: ip");
+        // println!("found: ip");
         stub = format!("{}/api/v3/ip_addresses/{}",virustotal_url, content);
     }else if parse_domain_name(content.as_str()).unwrap().has_known_suffix() {
         // content is domain
-        println!("found: domain");
+        // println!("found: domain");
         stub = format!("{}/api/v3/domains/{}",virustotal_url, content);
     } else {
         // assume content is hash
-        println!("found: hash");
+        // println!("found: hash");
         stub = format!("{}/api/v3/files/{}",virustotal_url, content);
     }
 

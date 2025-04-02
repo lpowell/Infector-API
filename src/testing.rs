@@ -10,6 +10,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 // Must import api_structs 
 use crate::api_structs;
 
+// import logging
+use crate::logger;
+
 // Routing function
 // this function matches a valid path to a resource
 // all paths should be in the form of <url>/<endpoint>/<resource>
@@ -58,7 +61,7 @@ pub async fn hello_world(
                 .expect("A number should be here...");
             
             // Helpful message for logging    
-            tracing::info!("API key found, expire_time: {}", row.expire_time.unwrap());
+            let test = tracing::info!("API key found, expire_time: {}", row.expire_time.unwrap());
             
             // Get the current time
             let current_time = SystemTime::now()
@@ -68,15 +71,24 @@ pub async fn hello_world(
             
             // Test if the expire time is valid 
             if  current_time >= cmp_time {
+                let warning = format!("[INFO] API Key expired! [key] {}", api_key);
+                logger::writelog("access", warning);
                 return Err(StatusCode::UNAUTHORIZED);
             }
+            let info = format!("[INFO] API Key validated [key] {}", api_key);
+            logger::writelog("access", info);
         }
         Ok(None) => {
             tracing::warn!("API key not found: {}", api_key);
+            // Issue a warning if the key is not in the database
+            let warning = format!("[WARNING] API Key not found! [key] {}", api_key);
+            logger::writelog("access", warning);
             return Err(StatusCode::UNAUTHORIZED);
         }
         Err(e) => {
             tracing::error!("Database select failed: {}", e);
+            let error = format!("[ERROR] Database select failed!");
+            logger::writelog("transaction", error);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }

@@ -9,6 +9,10 @@ use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+// logging import
+use crate::logger;
+
+
 // Define user authentication request payload
 #[derive(Deserialize)]
 pub struct LoginRequest {
@@ -43,11 +47,6 @@ pub async fn auth_login(
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, StatusCode> {
 
-    println!("Got connection");
-    // Hardcoded credentials
-    // let valid_user = "bajiri";
-    // let valid_pass = "1234";
-
     // get user name from db if submitted username and password exist
     // fetch_one will error if no rows are returned
     if let Err(e) = sqlx::query!(
@@ -57,6 +56,8 @@ pub async fn auth_login(
     .fetch_one(& *pool)
     .await{
         tracing::error!("Database lookup failed: {}", e);
+        let warning = format!("[WARNING] Database lookup up failed! [user] {} [error] {}", payload.username, e);
+        logger::writelog("access",warning);
         return Err(StatusCode::UNAUTHORIZED);
     };
 
@@ -93,13 +94,14 @@ pub async fn auth_login(
     .await
     {
         tracing::error!("Database insert failed: {}", e);
+        let info = format!("[INFO] Database API Key insertion failed! [error] {}", e);
+        logger::writelog("transaction", info);
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     // explicit commit
     tx.commit().await.expect("Failed to commit transaction");
     tracing::info!("Transaction committed successfully!");
-
 
     // Return response
     Ok(Json(AuthResponse {

@@ -1,31 +1,26 @@
 use axum::{
     extract::{Json, State, Path},
     http::StatusCode,
-    routing::{get,post},
-    response::Redirect,
-    Router,
 };
-use axum_macros::debug_handler;
-use rand::{distr::Alphanumeric, Rng};
-use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Sqlite, SqlitePool};
+use sqlx::SqlitePool;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::net::TcpListener;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use std::time::{SystemTime, UNIX_EPOCH};
 use base64::prelude::*; // Import Base64 for encoding/decoding data
 
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce
 };
 
-use hex::decode;
 
 use anyhow::Result;
 
 // Must import api_structs 
 use crate::api_structs;
+
+// logging import
+use crate::logger;
+
 
 // Routing function
 // this function matches a valid path to a resource
@@ -97,8 +92,13 @@ pub async fn base64(
     }
 
     // This is where the API resource code goes
-    let response = String::from_utf8(BASE64_STANDARD.decode(payload.content).unwrap()).expect("Failed to decode Base64 URL");
-
+    let mut response = String::new();
+    if let Err(e) = BASE64_STANDARD.decode(&payload.content) {
+        response = format!("Failed to decode Base64 with error: {}", e);
+        
+    } else {
+        response = String::from_utf8(BASE64_STANDARD.decode(&payload.content).expect("Failed to decode Base64 URL")).unwrap();
+    }
 
     // Return value must be wrapped in a TextResponse struct
     Ok(Json(api_structs::TextResponse{
@@ -146,15 +146,25 @@ pub async fn encryption(
             
             // Test if the expire time is valid 
             if  current_time >= cmp_time {
+                let warning = format!("[INFO] API Key expired! [key] {}", api_key);
+                logger::writelog("access", warning);
                 return Err(StatusCode::UNAUTHORIZED);
             }
+            let info = format!("[INFO] API Key validated [key] {}", api_key);
+            logger::writelog("access", info);
+
         }
         Ok(None) => {
             tracing::warn!("API key not found: {}", api_key);
+            // Issue a warning if the key is not in the database
+            let warning = format!("[WARNING] API Key not found! [key] {}", api_key);
+            logger::writelog("access", warning);
             return Err(StatusCode::UNAUTHORIZED);
         }
         Err(e) => {
             tracing::error!("Database select failed: {}", e);
+            let error = format!("[ERROR] Database select failed!");
+            logger::writelog("transaction", error);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
@@ -166,11 +176,21 @@ pub async fn encryption(
 
     match payload.key {
         Some(data) => key_str = data,
-        None => return Err(StatusCode::INTERNAL_SERVER_ERROR)
+        None => {
+            let response = "Please submit a valid key in your payload".to_string();
+            return Ok(Json(api_structs::TextResponse{
+                response
+            }))
+        }
     }
     match payload.nonce {
         Some(data) => nonce = data,
-        None => return Err(StatusCode::INTERNAL_SERVER_ERROR)
+        None => {
+            let response = "Please submit a valid nonce in your payload".to_string();
+            return Ok(Json(api_structs::TextResponse{
+                response
+            }))
+        }
     }
 
 
@@ -205,7 +225,7 @@ pub async fn encryption(
 
     */
     
-    let mut response: String;
+    let response: String;
 
     let key = Key::<Aes256Gcm>::from_slice(key_str.as_bytes());
     let cipher = Aes256Gcm::new(key);

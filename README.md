@@ -22,6 +22,7 @@ INFECTOR API
         - [Convert](#convert)
         - [Scanner](#scanner)
         - [Operational](#operational)
+        - [Endpoint](#endpoint)
     - [Structs](#structs)
     - [Database](#database)
 - [Editing](#editing)
@@ -51,16 +52,19 @@ INFECTOR API
 - Database diagrams
 - Better documentation
 - PowerShell API module improvements
-- Improvements to error handling and reporting
-    - API should return functional/usable errors
-    - StatusCode adjustments  
-- [Logging improvements](#logging)
-    - Access Log
-    - Resource Log
-    - Transaction Log
+- SSL (native or proxy)
+- ~~Improvements to error handling and reporting~~
+    - ~~API should return functional/usable errors~~
+    - ~~StatusCode adjustments~~  
+- ~~[Logging improvements](#logging)~~
+    - ~~Access Log~~
+    - ~~Resource Log~~
+    - ~~Transaction Log~~
 
 ### Recent Additions
 
+- Logging has been enhanced [Logging improvements](#logging)
+- Added a new endpoint for retrieving Github raw files
 - Added a resource for [pulling session key expire time](#operational) at `<server>/operational/expire-time`
 - Added [AES-GCM decryptor](#convert) to convert endpoint at `<server>/convert/encryption/aesgcm`
 - Updated PowerShell API module
@@ -212,6 +216,26 @@ This will return the time (in epoch) that the current key expires.
     "api_key": "key"
 }
 ```
+#### Endpoint
+This API endpoint is for resources that interact with the client. Currently, this is used to send GitHub raw files to the client. It can also be utilized to send local files as well. 
+
+To list available files:
+```JSON
+# to <server>/endpoint/list
+{
+    "api_key": "key",
+    "content": "list"
+}
+```
+
+To get the content of a file:
+```JSON
+# to <server>\endpoint\script
+{
+    "api_key": "key",
+    "content": "short_name"
+}
+```
 
 ### Structs
 
@@ -262,6 +286,41 @@ In the existing endpoint module
 
 ## Logging
 
-Logging is currently performed with tracing::info!. This records certain database information and transactions. Server logging is done through the console with enhanced logging planned at a later point in development.
+Infector API logs to `/var/log/infector_api/*`. It currently creates two log files:
+- access.log
+- transaction.log
 
-Ideally, an access log, resource log, and database log will be utilized. The access log will record web server connections, the resource log will record endpoint operations, and the database log will record transactions.
+The access log is utilized for tracking connections and resource validation. For example, access log will store the origin IP, headers, and body of every request. It also stores informational logs on account and key validation.
+
+Logging code is located in logger.rs
+
+Example access logs
+```text
+[2025-04-02 05:22:23.099618396 UTC] [client: <client ip>] [agent: PostmanRuntime/7.43.2] [headers] {"content-type": "application/json", "user-agent": "PostmanRuntime/7.43.2", "accept": "*/*", "postman-token": "6fecc9bd-3160-4a56-99d8-b86871e4aec2", "host": "<host>", "accept-encoding": "gzip, deflate, br", "connection": "keep-alive", "content-length": "55"} [URI] /testing/hello_world [payload] {[required] key: <key> }
+
+[2025-04-02 05:23:13.782334495 UTC] [client: <client ip>] [agent: PostmanRuntime/7.43.2] [headers] {"content-type": "application/json", "user-agent": "PostmanRuntime/7.43.2", "accept": "*/*", "postman-token": "56756d0c-a5a8-4e1c-903e-103add1c7df6", "host": "<host>", "accept-encoding": "gzip, deflate, br", "connection": "keep-alive", "content-length": "55"} [URI] /testing/hello_world [payload] {[required] key: <key> }
+
+[2025-04-02 05:23:13.783410555 UTC] [INFO] API Key validated [key] <key>
+
+[2025-04-02 05:23:15.352422358 UTC] [client: <client ip>] [agent: PostmanRuntime/7.43.2] [headers] {"content-type": "application/json", "user-agent": "PostmanRuntime/7.43.2", "accept": "*/*", "postman-token": "4c91806a-4c12-40d6-926d-ee1de1c7e3da", "host": "<host>", "accept-encoding": "gzip, deflate, br", "connection": "keep-alive", "content-length": "55"} [URI] /testing/hello_world [payload] {[required] key: <key> }
+
+[2025-04-02 05:23:15.353240269 UTC] [INFO] API Key validated [key] <key>
+```
+
+Transaction logs mainly hold database logging through a custom tracing subscriber. All `Tracing!` logs are written to the transaction log. 
+
+Example tracing logs
+```text
+2025-04-02T05:21:55.443726Z DEBUG sqlx::query: summary="PRAGMA foreign_keys = ON; …" db.statement="\n\nPRAGMA foreign_keys = ON; \n" rows_affected=0 rows_returned=0 elapsed=64.046µs elapsed_secs=6.4046e-5
+2025-04-02T05:21:55.444348Z  INFO infector_api: Server listening on 0.0.0.0:80
+2025-04-02T05:22:20.931696Z DEBUG sqlx::query: summary="PRAGMA foreign_keys = ON; …" db.statement="\n\nPRAGMA foreign_keys = ON; \n" rows_affected=0 rows_returned=0 elapsed=76.665µs elapsed_secs=7.6665e-5
+2025-04-02T05:22:20.932375Z  INFO infector_api: Server listening on 0.0.0.0:80
+2025-04-02T05:23:12.868036Z DEBUG sqlx::query: summary="PRAGMA foreign_keys = ON; …" db.statement="\n\nPRAGMA foreign_keys = ON; \n" rows_affected=0 rows_returned=0 elapsed=79.749µs elapsed_secs=7.9749e-5
+2025-04-02T05:23:12.868679Z  INFO infector_api: Server listening on 0.0.0.0:80
+2025-04-02T05:23:13.783166Z DEBUG sqlx::query: summary="SELECT expire_time FROM infector_auth …" db.statement="\n\nSELECT expire_time FROM infector_auth WHERE api_key = ?1\n" rows_affected=0 rows_returned=1 elapsed=374.782µs elapsed_secs=0.000374782
+2025-04-02T05:23:13.783351Z  INFO infector_api::testing: API key found, expire_time: 1743571506
+2025-04-02T05:23:15.352959Z DEBUG sqlx::query: summary="SELECT expire_time FROM infector_auth …" db.statement="\n\nSELECT expire_time FROM infector_auth WHERE api_key = ?1\n" rows_affected=0 rows_returned=1 elapsed=94.067µs elapsed_secs=9.4067e-5
+2025-04-02T05:23:15.353167Z  INFO infector_api::testing: API key found, expire_time: 1743571506
+```
+
+At some point, the transaction log will be cleaned up to only log database information. It currently has some temporary logs from earlier logging solutions. 

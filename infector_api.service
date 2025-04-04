@@ -1,0 +1,16 @@
+[Unit]
+Description=Infector API Axum HTTPS server
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=infectorapi
+ExecStart=/opt/infector_api/infector_api
+Restart=always
+
+
+[Install]
+WantedBy=multi-user.target

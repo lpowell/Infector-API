@@ -1,18 +1,37 @@
+#![allow(unused_imports)]
+
+
 use axum::{
     extract::{Json, State, Path, OriginalUri},
-    http::{StatusCode, HeaderMap, Request, Uri},
+    http::{uri::Authority, StatusCode, HeaderMap, Request, Uri},
     routing::{get,post},
     response::Redirect,
+    Extension,
+    middleware::AddExtension,
     Router,
+    BoxError,
+    handler::HandlerWithoutStateExt,
+};
+use axum_server::{
+    accept::Accept,
+    tls_rustls::{RustlsAcceptor, RustlsConfig},
 };
 use axum_macros::debug_handler;
+use axum_extra::extract::Host;
 use axum_client_ip::{SecureClientIp, SecureClientIpSource};
+use rustls_acme::caches::DirCache;
+use rustls_acme::AcmeConfig;
+use clap::Parser;
+use std::path::PathBuf;
+use tokio_stream::StreamExt;
+use from_os_str::*;
+
 
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use std::net::SocketAddr;
+use std::net::{Ipv6Addr, SocketAddr};
 
 
 // logging
@@ -40,6 +59,14 @@ mod operational;
 mod endpoint;
 
 
+// Ports struct for redirect
+#[allow(dead_code)]
+#[derive(Clone, Copy)]
+struct Ports {
+    http: u16,
+    https: u16,
+}
+
 // Begin handlers
 
 #[tokio::main]
@@ -53,8 +80,27 @@ async fn main() {
     // tracing logs to /var/log/infector_api/transaction.log
     logger::init_logger();
 
+    //SSL https://github.com/FlorianUekermann/rustls-acme/blob/main/examples/low_level_axum.rs
+    let mut tls_inc = AcmeConfig::new(["<domain>"]) // domain 
+        .contact_push("mailto: <your address>") // email (must be valid)
+        .cache(DirCache::new("./rustls_acme_cache")) // cert cache
+        .directory_lets_encrypt(true) // true = prod | false = test
+        .state();
+    let acceptor = tls_inc.axum_acceptor(tls_inc.default_rustls_config()); // create axum acceptor
+
+    // Logging for rustls-acme cert get/validation
+    // Keeping this printing for now. Will likely go into resource log.
+    tokio::spawn(async move {
+        loop {
+            match tls_inc.next().await.unwrap() {
+                Ok(ok) => println!("event: {:?}", ok),
+                Err(err) => println!("error: {:?}", err),
+            }
+        }
+    });
+
     // Load database URL
-    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "<dbstring>>".to_string());
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "<dbpath>".to_string());
 
     // Set up connection pool
     let pool = SqlitePool::connect(&db_url)
@@ -63,6 +109,16 @@ async fn main() {
 
     // Wrap database pool in Arc for shared state
     let shared_state = Arc::new(pool);
+
+    // redirtect http to https
+    let ports = Ports {
+        http: 80,
+        https: 443
+    };
+
+    // Spawn HTTP server thread for redirecting requests to HTTPS
+    tokio::spawn(redirect_http_to_https(ports));
+
 
     // Define the router
     let app = Router::new()
@@ -79,18 +135,68 @@ async fn main() {
         // Layer connect info to extension to support client ip extraction
         .layer(SecureClientIpSource::ConnectInfo.into_extension())
         .with_state(shared_state);
-    // Default route should redirect to 
 
-    // set ctrl+c behavior
-    // ctrlc::set_handler(move || {
-    //     pool.close();
-    // }).expect("Could not set up handler");
 
     // Start the server
-    let listener = TcpListener::bind("0.0.0.0:80").await.unwrap();
-    tracing::info!("Server listening on {}", listener.local_addr().unwrap());
+    let addr = SocketAddr::from((Ipv6Addr::UNSPECIFIED, 443));
+
+    // no spin up logs 
+    // tracing::info!("Server listening on {}", listener.local_addr().unwrap());
+
+    // bind on address and acceptor
+    let server = axum_server::bind(addr).acceptor(acceptor);
+
+    // redirect http here maybe
+
     // Connect Info allows for the extraction of the client IP address
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
+    server.serve(app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
+}
+
+// HTTP redirect https://github.com/tokio-rs/axum/blob/main/examples/tls-rustls/src/main.rs
+#[allow(dead_code)]
+async fn redirect_http_to_https(ports: Ports) {
+    fn make_https(host: &str, uri: Uri, https_port: u16) -> Result<Uri, BoxError> {
+        let mut parts = uri.into_parts();
+
+        parts.scheme = Some(axum::http::uri::Scheme::HTTPS);
+
+        if parts.path_and_query.is_none() {
+            parts.path_and_query = Some("/".parse().unwrap());
+        }
+
+        let authority: Authority = host.parse()?;
+        let bare_host = match authority.port() {
+            Some(port_struct) => authority
+                .as_str()
+                .strip_suffix(port_struct.as_str())
+                .unwrap()
+                .strip_suffix(':')
+                .unwrap(), // if authority.port() is Some(port) then we can be sure authority ends with :{port}
+            None => authority.as_str(),
+        };
+
+        parts.authority = Some(format!("{bare_host}:{https_port}").parse()?);
+
+        Ok(Uri::from_parts(parts)?)
+    }
+
+    let redirect = move |Host(host): Host, uri: Uri| async move {
+        match make_https(&host, uri, ports.https) {
+            Ok(uri) => Ok(Redirect::permanent(&uri.to_string())),
+            Err(error) => {
+                tracing::warn!(%error, "failed to convert URI to HTTPS");
+                Err(StatusCode::BAD_REQUEST)
+            }
+        }
+    };
+
+    let addr = SocketAddr::from((Ipv6Addr::UNSPECIFIED, ports.http)); // remember to make sure you're not listening on localhost lol
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    // let log = format!("listening on {}", listener.local_addr().unwrap());
+    // logger::writelog("access", log);
+    axum::serve(listener, redirect.into_make_service())
+        .await
+        .unwrap();
 }
 
 

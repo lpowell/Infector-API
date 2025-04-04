@@ -40,7 +40,7 @@ INFECTOR API
     - RSA
     - ChaCha20
 - Endpoint API
-    - Install or execute remote scripts from github or other specified sources
+    - ~~Install or execute remote scripts from github or other specified sources~~
     - String analysis for submitted files
 - Additional scanners
     - Censys
@@ -52,7 +52,7 @@ INFECTOR API
 - Database diagrams
 - Better documentation
 - PowerShell API module improvements
-- SSL (native or proxy)
+- ~~SSL (native or proxy)~~
 - ~~Improvements to error handling and reporting~~
     - ~~API should return functional/usable errors~~
     - ~~StatusCode adjustments~~  
@@ -63,6 +63,10 @@ INFECTOR API
 
 ### Recent Additions
 
+- Created a .service file and install file for setting the api server up as a system service
+- Added in HTTP -> HTTPS redirect 
+- Fixed a bug with the virustotal scanner that would cause socket resets on file hash submissions
+- API is now served over SSL! (No HTTP redirect as of yet)
 - Logging has been enhanced [Logging improvements](#logging)
 - Added a new endpoint for retrieving Github raw files
 - Added a resource for [pulling session key expire time](#operational) at `<server>/operational/expire-time`

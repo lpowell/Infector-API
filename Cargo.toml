@@ -24,6 +24,12 @@ hex = "0.4.3"
 phf = { version = "0.11.3", features = ["macros"] }
 chrono = "0.4.40"
 axum-client-ip = "0.7.0"
+rustls-acme = {version = "*", features=["axum"]}
+clap = { version="4.5.35", features = ["derive"]}
+tokio-stream = "0.1.17"
+from-os-str = "0.1.0"
+axum-server = "0.7.2"
+axum-extra = "0.10.1"
 
 
 

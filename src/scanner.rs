@@ -281,14 +281,16 @@ pub async fn virustotal(
         // content is ip
         // println!("found: ip");
         stub = format!("{}/api/v3/ip_addresses/{}",virustotal_url, content);
-    }else if parse_domain_name(content.as_str()).unwrap().has_known_suffix() {
-        // content is domain
-        // println!("found: domain");
-        stub = format!("{}/api/v3/domains/{}",virustotal_url, content);
-    } else {
+    }else if let Err(e) = parse_domain_name(content.as_str()){
         // assume content is hash
         // println!("found: hash");
         stub = format!("{}/api/v3/files/{}",virustotal_url, content);
+        
+    } else {
+        // content is domain
+        // println!("found: domain");
+        // let submitted_domain = parse_domain_name(content.as_str()).unwrap().has_known_suffix() 
+        stub = format!("{}/api/v3/domains/{}",virustotal_url, content);
     }
 
 
